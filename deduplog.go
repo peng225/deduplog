@@ -18,7 +18,8 @@ type HandlerOptions struct {
 }
 
 type DedupHandler struct {
-	mu           *sync.Mutex
+	ctx          context.Context
+	mu           sync.Mutex
 	handler      slog.Handler
 	opts         HandlerOptions
 	history      map[string]time.Time
@@ -27,7 +28,8 @@ type DedupHandler struct {
 
 func NewDedupHandler(ctx context.Context, handler slog.Handler, opts *HandlerOptions) *DedupHandler {
 	h := &DedupHandler{
-		mu:      &sync.Mutex{},
+		ctx:     ctx,
+		mu:      sync.Mutex{},
 		handler: handler,
 		history: make(map[string]time.Time),
 	}
@@ -122,9 +124,9 @@ func (h *DedupHandler) Handle(ctx context.Context, r slog.Record) error {
 }
 
 func (h *DedupHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	return h.handler.WithAttrs(attrs)
+	return NewDedupHandler(h.ctx, h.handler.WithAttrs(attrs), &h.opts)
 }
 
 func (h *DedupHandler) WithGroup(name string) slog.Handler {
-	return h.handler.WithGroup(name)
+	return NewDedupHandler(h.ctx, h.handler.WithGroup(name), &h.opts)
 }
