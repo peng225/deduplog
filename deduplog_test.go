@@ -106,6 +106,27 @@ func TestDeleteHistorySynchronously(t *testing.T) {
 	assert.Equal(t, expectedMsg, jsonLog["msg"])
 }
 
+func TestDeleteHistoryAsynchronously(t *testing.T) {
+	b := new(bytes.Buffer)
+	logger := slog.New(NewDedupHandler(context.Background(), slog.NewJSONHandler(b, nil),
+		&HandlerOptions{
+			HistoryRetentionPeriod: time.Microsecond * 100,
+			MaxHistoryCount:        DefaultMaxHistoryCount,
+		}))
+	require.NotNil(t, logger)
+
+	logger.Info("test1")
+	time.Sleep(time.Microsecond * 110)
+
+	b.Reset()
+	logger.Info("test1")
+	expectedMsg := "test1"
+	jsonLog := make(map[string]string)
+	err := json.Unmarshal(b.Bytes(), &jsonLog)
+	require.NoError(t, err)
+	assert.Equal(t, expectedMsg, jsonLog["msg"])
+}
+
 func TestDedupLogLevel(t *testing.T) {
 	b := new(bytes.Buffer)
 	logger := slog.New(NewDedupHandler(context.Background(), slog.NewJSONHandler(b, nil),
