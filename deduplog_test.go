@@ -105,3 +105,28 @@ func TestDeleteHistorySynchronously(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, expectedMsg, jsonLog["msg"])
 }
+
+func TestDedupLogLevel(t *testing.T) {
+	b := new(bytes.Buffer)
+	logger := slog.New(NewDedupHandler(context.Background(), slog.NewJSONHandler(b, nil),
+		&HandlerOptions{
+			HistoryRetentionPeriod: time.Minute,
+			MaxHistoryCount:        DefaultMaxHistoryCount,
+		}))
+	require.NotNil(t, logger)
+
+	logger.Warn("test")
+	expectedMsg := "test"
+	jsonLog := make(map[string]string)
+	err := json.Unmarshal(b.Bytes(), &jsonLog)
+	require.NoError(t, err)
+	assert.Equal(t, expectedMsg, jsonLog["msg"])
+
+	// Warn() is not deduplicated.
+	b.Reset()
+	logger.Warn("test")
+	jsonLog = make(map[string]string)
+	err = json.Unmarshal(b.Bytes(), &jsonLog)
+	require.NoError(t, err)
+	assert.Equal(t, expectedMsg, jsonLog["msg"])
+}

@@ -15,6 +15,7 @@ const (
 type HandlerOptions struct {
 	HistoryRetentionPeriod time.Duration
 	MaxHistoryCount        int
+	DedupLogLevel          slog.Level
 }
 
 type DedupHandler struct {
@@ -39,6 +40,7 @@ func NewDedupHandler(ctx context.Context, handler slog.Handler, opts *HandlerOpt
 	} else {
 		h.opts.HistoryRetentionPeriod = DefaultHistoryRetentionPeriod
 		h.opts.MaxHistoryCount = DefaultMaxHistoryCount
+		h.opts.DedupLogLevel = slog.LevelInfo
 	}
 
 	ticker := time.NewTicker(time.Second * 5)
@@ -116,7 +118,7 @@ func (h *DedupHandler) updateHistory(msg string) {
 }
 
 func (h *DedupHandler) Handle(ctx context.Context, r slog.Record) error {
-	if h.duplicated(r.Message) {
+	if r.Level <= h.opts.DedupLogLevel && h.duplicated(r.Message) {
 		return nil
 	}
 	h.updateHistory(r.Message)
