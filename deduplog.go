@@ -7,15 +7,22 @@ import (
 	"time"
 )
 
+const (
+	DefaultHistoryRetentionPeriod time.Duration = time.Second * 10
+	DefaultMaxHistoryCount        int           = 1024
+)
+
 type HandlerOptions struct {
 	HistoryRetentionPeriod time.Duration
+	MaxHistoryCount        int
 }
 
 type DedupHandler struct {
-	mu      *sync.Mutex
-	handler slog.Handler
-	opts    HandlerOptions
-	history map[string]time.Time
+	mu           *sync.Mutex
+	handler      slog.Handler
+	opts         HandlerOptions
+	history      map[string]time.Time
+	historyCount int
 }
 
 func NewDedupHandler(ctx context.Context, handler slog.Handler, opts *HandlerOptions) *DedupHandler {
@@ -28,7 +35,8 @@ func NewDedupHandler(ctx context.Context, handler slog.Handler, opts *HandlerOpt
 	if opts != nil {
 		h.opts = *opts
 	} else {
-		h.opts.HistoryRetentionPeriod = time.Second * 10
+		h.opts.HistoryRetentionPeriod = DefaultHistoryRetentionPeriod
+		h.opts.MaxHistoryCount = DefaultMaxHistoryCount
 	}
 
 	ticker := time.NewTicker(time.Second * 5)
@@ -56,6 +64,7 @@ func (h *DedupHandler) removeExpiredHistory() {
 	for k, v := range h.history {
 		if h.expired(v) {
 			delete(h.history, k)
+			h.historyCount -= 1
 		}
 	}
 }
@@ -76,9 +85,31 @@ func (h *DedupHandler) duplicated(msg string) bool {
 	return true
 }
 
+func (h *DedupHandler) removeOldestHistory() {
+	var toBeDeletedKey string
+	toBeDeletedTime := time.Now().Add(h.opts.HistoryRetentionPeriod)
+	for k, v := range h.history {
+		if v.Before(toBeDeletedTime) {
+			toBeDeletedKey = k
+			toBeDeletedTime = v
+		}
+	}
+	if toBeDeletedKey == "" {
+		panic("toBeDeletedKey should not be empty.")
+	}
+	delete(h.history, toBeDeletedKey)
+	h.historyCount -= 1
+}
+
 func (h *DedupHandler) updateHistory(msg string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	if _, ok := h.history[msg]; !ok {
+		if h.historyCount >= h.opts.MaxHistoryCount {
+			h.removeOldestHistory()
+		}
+		h.historyCount += 1
+	}
 	h.history[msg] = time.Now().Add(h.opts.HistoryRetentionPeriod)
 }
 
