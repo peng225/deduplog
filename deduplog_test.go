@@ -17,6 +17,7 @@ func TestDedupLog(t *testing.T) {
 	logger := slog.New(NewDedupHandler(context.Background(), slog.NewJSONHandler(b, nil),
 		&HandlerOptions{
 			HistoryRetentionPeriod: time.Minute,
+			MaxHistoryCount:        DefaultMaxHistoryCount,
 		}))
 	require.NotNil(t, logger)
 
@@ -38,6 +39,31 @@ func TestDedupLog(t *testing.T) {
 	expectedMsg = "test2"
 	jsonLog = make(map[string]string)
 	err = json.Unmarshal(b.Bytes(), &jsonLog)
+	require.NoError(t, err)
+	assert.Equal(t, expectedMsg, jsonLog["msg"])
+}
+
+func TestDeleteHistorySynchronously(t *testing.T) {
+	b := new(bytes.Buffer)
+	logger := slog.New(NewDedupHandler(context.Background(), slog.NewJSONHandler(b, nil),
+		&HandlerOptions{
+			HistoryRetentionPeriod: time.Minute,
+			MaxHistoryCount:        2,
+		}))
+	require.NotNil(t, logger)
+
+	logger.Info("test1")
+	time.Sleep(time.Millisecond * 5)
+	logger.Info("test2")
+	time.Sleep(time.Millisecond * 5)
+	logger.Info("test3")
+
+	// The oldest log should be deleted.
+	b.Reset()
+	logger.Info("test1")
+	expectedMsg := "test1"
+	jsonLog := make(map[string]string)
+	err := json.Unmarshal(b.Bytes(), &jsonLog)
 	require.NoError(t, err)
 	assert.Equal(t, expectedMsg, jsonLog["msg"])
 }
