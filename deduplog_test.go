@@ -43,6 +43,44 @@ func TestDedupLog(t *testing.T) {
 	assert.Equal(t, expectedMsg, jsonLog["msg"])
 }
 
+func TestDedupLogWithAttrsAndGroup(t *testing.T) {
+	b := new(bytes.Buffer)
+	logger := slog.New(NewDedupHandler(context.Background(),
+		slog.NewJSONHandler(b, &slog.HandlerOptions{
+			AddSource: true,
+		}),
+		&HandlerOptions{
+			HistoryRetentionPeriod: time.Minute,
+			MaxHistoryCount:        DefaultMaxHistoryCount,
+		}))
+	require.NotNil(t, logger)
+
+	logger.Info("test", "key1", 1, slog.Group("g1", "key2", 2))
+	expectedMsg := "test"
+	jsonLog := make(map[string]any)
+	err := json.Unmarshal(b.Bytes(), &jsonLog)
+	require.NoError(t, err)
+	assert.Equal(t, expectedMsg, jsonLog["msg"])
+	assert.Contains(t, jsonLog, "source")
+
+	// Attrs and groups are ignored.
+	b.Reset()
+	logger.Info("test")
+	assert.Empty(t, b.String())
+
+	// New logger is not related with the original logger,
+	// but the option of the wrapped handler is inherited.
+	b.Reset()
+	loggerWithAG := logger.WithGroup("g1").With("key1", "value1")
+	loggerWithAG.Info("test", "key2", "value2")
+	expectedMsg = "test"
+	jsonLog = make(map[string]any)
+	err = json.Unmarshal(b.Bytes(), &jsonLog)
+	require.NoError(t, err)
+	assert.Equal(t, expectedMsg, jsonLog["msg"])
+	assert.Contains(t, jsonLog, "source")
+}
+
 func TestDeleteHistorySynchronously(t *testing.T) {
 	b := new(bytes.Buffer)
 	logger := slog.New(NewDedupHandler(context.Background(), slog.NewJSONHandler(b, nil),
