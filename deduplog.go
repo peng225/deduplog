@@ -22,10 +22,13 @@ func NewDedupHandler(ctx context.Context, handler slog.Handler, opts *HandlerOpt
 	h := &DedupHandler{
 		mu:      &sync.Mutex{},
 		handler: handler,
+		history: make(map[string]time.Time),
 	}
 
 	if opts != nil {
 		h.opts = *opts
+	} else {
+		h.opts.HistoryRetentionPeriod = time.Second * 10
 	}
 
 	ticker := time.NewTicker(time.Second * 5)
@@ -80,11 +83,10 @@ func (h *DedupHandler) updateHistory(msg string) {
 }
 
 func (h *DedupHandler) Handle(ctx context.Context, r slog.Record) error {
-	defer h.updateHistory(r.Message)
-
 	if h.duplicated(r.Message) {
 		return nil
 	}
+	h.updateHistory(r.Message)
 	return h.handler.Handle(ctx, r)
 }
 
