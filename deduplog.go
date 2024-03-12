@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	DefaultHistoryRetentionPeriod time.Duration = time.Second * 10
+	DefaultHistoryRetentionPeriod time.Duration = time.Second * 20
 	DefaultMaxHistoryCount        int           = 1024
 )
 
@@ -43,7 +43,7 @@ func NewDedupHandler(ctx context.Context, handler slog.Handler, opts *HandlerOpt
 		h.opts.DedupLogLevel = slog.LevelInfo
 	}
 
-	ticker := time.NewTicker(time.Second * 5)
+	ticker := time.NewTicker(time.Second * 2)
 	go func() {
 		select {
 		case <-ctx.Done():
